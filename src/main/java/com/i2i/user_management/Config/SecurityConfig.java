@@ -72,19 +72,14 @@ public class SecurityConfig {
                     .authenticationProvider(authenticationProvider)
                     .authorizeHttpRequests(auth -> auth
                             .requestMatchers("/users/register", "/auth/login", "/auth/logout").permitAll()
-                            .requestMatchers("/users/all",
-                                    "/users/*/reset-password",
-                                    "/users/*/delete", "/users/create",
-                                    "/users/*/delete", "/users/*",
-                                    "/users/email/*", "/roles/create",
-                                    "/roles/all", "/roles/*", "/roles/name/*", "/roles/assign/*")
+                            .requestMatchers("/users", "/users/*/reset-password", "/users/email/*",
+                                    "/roles/create", "/roles/all", "/roles/*", "/roles/name/*", "/roles/assign/*")
                                     .hasAuthority(UMSConstants.SUPER_ADMIN_ROLE)
                             .requestMatchers("/expenses/*/action", "/expenses/all",
                                     "/expenses/report/approved-per-employee", "/expenses/report/by-currency")
                                     .hasAuthority(UMSConstants.FINANCE_ADMIN_ROLE)
-                            .requestMatchers("/users/change-password", "/expenses/create",
-                                    "/expenses/*", "/expenses/update", "/expenses/currencies",
-                                    "/expenses/*/delete")
+                            .requestMatchers("/users/change-password", "/expenses",
+                                    "/expenses/*", "/expenses/update", "/expenses/currencies")
                                     .hasAnyAuthority(UMSConstants.EMPLOYEE_ROLE,
                                             UMSConstants.FINANCE_ADMIN_ROLE, UMSConstants.SUPER_ADMIN_ROLE)
                             .anyRequest().authenticated()
@@ -158,7 +153,7 @@ public class SecurityConfig {
     @Lazy
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         try {
-            logger.debug("Loading AuthenticationManager...");
+            logger.debug("Loading AuthenticationManager");
             return authenticationConfiguration.getAuthenticationManager();
         } catch (Exception e) {
             logger.error("Error initializing AuthenticationManager: {}", e.getMessage(), e);

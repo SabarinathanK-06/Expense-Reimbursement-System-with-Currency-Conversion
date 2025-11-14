@@ -8,7 +8,6 @@ import com.i2i.user_management.Dto.ExpenseResponseDto;
 import com.i2i.user_management.Helper.SecurityContextHelper;
 import com.i2i.user_management.Service.ExpenseService;
 import jakarta.validation.Valid;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -51,7 +50,7 @@ public class ExpenseController {
      * @param request DTO containing expense details (title, amount, date, currency, etc.)
      * @return Created expense with INR conversion details
      */
-    @PostMapping("/create")
+    @PostMapping
     public ResponseEntity<ExpenseResponseDto> submitExpense(@Valid @RequestBody ExpenseRequestDto request) {
         String email = SecurityContextHelper.extractEmailFromContext();
         log.info("User {} is submitting a new expense", email);
@@ -110,7 +109,7 @@ public class ExpenseController {
      * @param id the unique identifier of the expense to delete
      * @return 204 No Content if deletion is successful
      */
-    @DeleteMapping("/{id}/delete")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteExpense(@PathVariable("id") UUID id) {
         String email = SecurityContextHelper.extractEmailFromContext();
         log.info("User {} requested to delete expense with ID {}", email, id);

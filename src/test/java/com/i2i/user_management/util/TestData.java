@@ -1,5 +1,6 @@
 package com.i2i.user_management.util;
 
+import com.i2i.user_management.Constants.UMSConstants;
 import com.i2i.user_management.Dto.CurrencySummaryDto;
 import com.i2i.user_management.Dto.EmployeeExpenseSummaryDto;
 import com.i2i.user_management.Dto.ExpenseApprovalDto;
@@ -7,31 +8,66 @@ import com.i2i.user_management.Dto.ExpenseRequestDto;
 import com.i2i.user_management.Dto.ExpenseResponseDto;
 import com.i2i.user_management.Dto.RegisterDto;
 import com.i2i.user_management.Dto.UserDto;
+import com.i2i.user_management.Dto.UserUpdateDto;
 import com.i2i.user_management.Enum.ExpenseStatus;
+import com.i2i.user_management.Helper.SecurityContextHelper;
 import com.i2i.user_management.Model.Expense;
 import com.i2i.user_management.Model.Role;
 import com.i2i.user_management.Model.User;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 public class TestData {
 
     public static User getUser() {
+        Set<Role> roles = getRoles();
         return User.builder()
                 .id(UUID.randomUUID())
                 .email("paari@mail.com")
                 .firstName("paari")
                 .lastName("seerangan")
                 .password("password123")
+                .roles(roles)
                 .isActive(true)
                 .isDeleted(false)
                 .build();
     }
+
+    public static Set<Role> getRoles() {
+        Set<Role> roleSet = new HashSet<>();
+        Role role = Role.builder()
+                .id(UUID.randomUUID())
+                .name(UMSConstants.EMPLOYEE_ROLE)
+                .build();
+        roleSet.add(role);
+        return roleSet;
+    }
+
+    public static UserUpdateDto getPartialUpdateDto() {
+        UserUpdateDto dto = new UserUpdateDto();
+        dto.setFirstName("updatedPaari");
+        return dto;
+    }
+
+    public static UserUpdateDto getUpdateUserDto() {
+        UserUpdateDto dto = new UserUpdateDto();
+        dto.setFirstName("NewFirst");
+        dto.setLastName("NewLast");
+        dto.setAddress("New Address");
+        dto.setProject("New Project");
+        dto.setDepartment("New Department");
+        return dto;
+    }
+
+
 
     public static Map<String, String> getAllCurrenciesApiResponse() {
         Map<String, String> response = new LinkedHashMap<>();
@@ -122,11 +158,11 @@ public class TestData {
 
     public static RegisterDto getRegisterDto() {
         RegisterDto dto = new RegisterDto();
-        dto.setFirstName("John");
-        dto.setLastName("Doe");
-        dto.setEmail("john.doe@mail.com");
+        dto.setFirstName("Sabari");
+        dto.setLastName("Krishnamoorthy");
+        dto.setEmail("sabari.k@mail.com");
         dto.setPassword("password123");
-        dto.setAddress("123 Street");
+        dto.setAddress("Chennai");
         dto.setDepartment("IT");
         dto.setProject("ProjectX");
         return dto;

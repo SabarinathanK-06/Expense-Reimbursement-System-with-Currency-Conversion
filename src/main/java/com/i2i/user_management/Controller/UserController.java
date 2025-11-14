@@ -1,10 +1,15 @@
 package com.i2i.user_management.Controller;
 
+import com.i2i.user_management.Constants.UMSConstants;
 import com.i2i.user_management.Dto.RegisterDto;
 import com.i2i.user_management.Dto.ResetPasswordDto;
 import com.i2i.user_management.Dto.UserDto;
+import com.i2i.user_management.Dto.UserUpdateDto;
 import com.i2i.user_management.Exception.BadRequestException;
+import com.i2i.user_management.Exception.UnauthorizedException;
 import com.i2i.user_management.Exception.ValidationException;
+import com.i2i.user_management.Helper.SecurityContextHelper;
+import com.i2i.user_management.Model.User;
 import com.i2i.user_management.Service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,7 +49,7 @@ public class UserController {
      * @param userDto The user details to be created.
      * @return ResponseEntity with the created user and HTTP 201 status.
      */
-    @PostMapping("/create")
+    @PostMapping
     public ResponseEntity<UserDto> createUser(@Valid @RequestBody UserDto userDto) {
         if (userDto == null || userDto.getEmail() == null || userDto.getEmail().isBlank()) {
             throw new ValidationException("User details or email cannot be null or blank");
@@ -76,7 +82,7 @@ public class UserController {
      *
      * @return List of UserDto representing all active users.
      */
-    @GetMapping("/all")
+    @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {
         logger.info("Fetching all active users");
         List<UserDto> users = userService.findAllUsers();
@@ -90,6 +96,7 @@ public class UserController {
      * @return User details as ResponseEntity.
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     public ResponseEntity<UserDto> getUserById(@PathVariable UUID id) {
         if (id == null) {
             throw new ValidationException("User ID cannot be null");
@@ -123,10 +130,21 @@ public class UserController {
      * @return Updated UserDto as ResponseEntity.
      */
     @PutMapping("/{id}")
-    public ResponseEntity<UserDto> updateUser(@PathVariable UUID id, @Valid @RequestBody UserDto userDto) {
+    @PreAuthorize("hasAnyAuthority('SUPER_ADMIN','EMPLOYEE')")
+    public ResponseEntity<UserDto> updateUser(@PathVariable UUID id, @RequestBody UserUpdateDto userDto) {
         if (id == null || userDto == null) {
             throw new ValidationException("User ID or user details cannot be null");
         }
+        List<String> currentUserRoles = SecurityContextHelper.getLoggedInUserRoles();
+        UUID userId = SecurityContextHelper.getLoggedInUserId();
+        System.out.println(currentUserRoles.contains(UMSConstants.EMPLOYEE_ROLE));
+        System.out.println(userId != id);
+        System.out.println(currentUserRoles.contains(UMSConstants.EMPLOYEE_ROLE) && userId != id);
+
+        if (currentUserRoles.contains(UMSConstants.EMPLOYEE_ROLE) && !userId.equals(id)) {
+            throw new UnauthorizedException("Employees can update only their own profile.");
+        }
+
         logger.info("Updating user with ID: {}", id);
         UserDto updatedUser = userService.editUser(userDto, id);
         logger.info("User updated successfully: {}", id);
@@ -178,7 +196,8 @@ public class UserController {
      * @param id The UUID of the user to delete.
      * @return HTTP 204 No Content on successful deletion.
      */
-    @DeleteMapping("/{id}/delete")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
         if (id == null) {
             throw new ValidationException("User ID cannot be null");
@@ -189,8 +208,4 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/testing")
-    public void testMethod(@Valid @RequestBody RegisterDto registerDto) {
-        System.out.println(" " + registerDto);
-    }
 }

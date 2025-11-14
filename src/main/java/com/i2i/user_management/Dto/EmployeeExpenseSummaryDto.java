@@ -16,13 +16,13 @@ import java.util.UUID;
 @AllArgsConstructor
 public class EmployeeExpenseSummaryDto {
 
-    private UUID employeeId;
+    private String employeeId;
     private String employeeName;
     private String currency;
     private BigDecimal totalAmount;
     private BigDecimal totalApprovedInInr;
 
-    public EmployeeExpenseSummaryDto(UUID employeeId, String employeeName, String currency, BigDecimal totalAmount) {
+    public EmployeeExpenseSummaryDto(String employeeId, String employeeName, String currency, BigDecimal totalAmount) {
         this.employeeId = employeeId;
         this.employeeName = employeeName;
         this.currency = currency;

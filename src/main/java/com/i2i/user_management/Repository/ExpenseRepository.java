@@ -40,15 +40,15 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
                                    Pageable pageable);
 
     @Query("SELECT new com.i2i.user_management.Dto.EmployeeExpenseSummaryDto("
-            + "e.requestedBy.id, "
+            + "e.requestedBy.employeeId, "
             + "CONCAT(e.requestedBy.firstName, ' ', e.requestedBy.lastName), "
             + "e.currency, "
             + "SUM(e.amount)) "
             + "FROM Expense e "
             + "WHERE e.isDeleted = false AND e.status = 'APPROVED' "
-            + "AND (:fromDate IS NULL OR e.expenseDate >= :fromDate) "
-            + "AND (:toDate IS NULL OR e.expenseDate <= :toDate) "
-            + "GROUP BY e.requestedBy.id, e.requestedBy.firstName, e.requestedBy.lastName, e.currency")
+            + "AND (e.expenseDate >= COALESCE(:fromDate, e.expenseDate)) "
+            + "AND (e.expenseDate <= COALESCE(:toDate, e.expenseDate)) "
+            + "GROUP BY e.requestedBy.employeeId, e.requestedBy.firstName, e.requestedBy.lastName, e.currency")
     List<EmployeeExpenseSummaryDto> totalApprovedPerEmployee(@Param("fromDate") LocalDate fromDate,
                                                              @Param("toDate") LocalDate toDate);
 
@@ -62,6 +62,15 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
             + "GROUP BY e.currency")
     List<CurrencySummaryDto> totalByCurrency(@Param("currency") String currency,
                                              @Param("fromDate") LocalDate fromDate,
+                                             @Param("toDate") LocalDate toDate);
+
+    @Query("SELECT new com.i2i.user_management.Dto.CurrencySummaryDto(e.currency, SUM(e.amount)) "
+            + "FROM Expense e "
+            + "WHERE e.isDeleted = false AND e.status = 'APPROVED' "
+            + "AND (e.expenseDate >= COALESCE(:fromDate, e.expenseDate)) "
+            + "AND (e.expenseDate <= COALESCE(:toDate, e.expenseDate)) "
+            + "GROUP BY e.currency")
+    List<CurrencySummaryDto> groupByCurrency(@Param("fromDate") LocalDate fromDate,
                                              @Param("toDate") LocalDate toDate);
 
 

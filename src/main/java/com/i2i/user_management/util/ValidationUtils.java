@@ -2,6 +2,8 @@ package com.i2i.user_management.util;
 
 import com.i2i.user_management.Exception.BadRequestException;
 
+import java.util.function.Consumer;
+
 /**
  * Utility class for common validation operations across the application.
  */
@@ -23,6 +25,12 @@ public final class ValidationUtils {
             throw new BadRequestException("Current user email is required");
         }
         return value;
+    }
+
+    public static <T> void updateIfNotNull(T value, Consumer<T> setter) {
+        if (value != null && value != "") {
+            setter.accept(value);
+        }
     }
 
 }

@@ -3,13 +3,16 @@ package com.i2i.user_management.Service.Impl;
 import com.i2i.user_management.Constants.UMSConstants;
 import com.i2i.user_management.Dto.RegisterDto;
 import com.i2i.user_management.Dto.UserDto;
+import com.i2i.user_management.Dto.UserUpdateDto;
 import com.i2i.user_management.Exception.*;
 import com.i2i.user_management.Helper.SecurityContextHelper;
+import com.i2i.user_management.Mapper.UserMapper;
 import com.i2i.user_management.Model.Role;
 import com.i2i.user_management.Model.User;
 import com.i2i.user_management.Repository.RoleRepository;
 import com.i2i.user_management.Repository.UserRepository;
 import com.i2i.user_management.Service.UserService;
+import com.i2i.user_management.util.ValidationUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.Year;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,34 +74,50 @@ public class UserServiceImpl implements UserService, UserDetailsService {
 
         logger.info("Saving new user: {}", userDto.getEmail());
 
-        String employeeId = generateEmployeeCode();
-        User user = User.builder()
-                .email(userDto.getEmail())
-                .firstName(userDto.getFirstName())
-                .lastName(userDto.getLastName())
-                .password(passwordEncoder.encode(employeeId))
-                .project(userDto.getProject())
-                .department(userDto.getDepartment())
-                .employeeId(employeeId)
-                .isActive(true)
-                .build();
+        try {
+            String employeeId = generateEmployeeCode();
 
-        //assign roles if provided
-        if (userDto.getRoleIds() != null && !userDto.getRoleIds().isEmpty()) {
-            List<Role> roles = roleRepository.findAllById(userDto.getRoleIds());
-            roles.forEach(role -> {
-                if (role.getIsDeleted()) {
-                    logger.warn("Attempt to assign deleted role: {}", role.getId());
-                    throw new RoleAssignmentException("Cannot assign deleted role: " + role.getId());
-                }
-            });
-            user.setRoles(roles.stream().collect(Collectors.toSet()));
+            User user = User.builder()
+                    .email(userDto.getEmail())
+                    .firstName(userDto.getFirstName())
+                    .lastName(userDto.getLastName())
+                    .password(passwordEncoder.encode(employeeId))
+                    .project(userDto.getProject())
+                    .department(userDto.getDepartment())
+                    .employeeId(employeeId)
+                    .isActive(true)
+                    .isDeleted(false)
+                    .build();
+
+            if (userDto.getRoleIds() != null && !userDto.getRoleIds().isEmpty()) {
+                List<Role> roles = roleRepository.findAllById(userDto.getRoleIds());
+                roles.forEach(role -> {
+                    if (role.getIsDeleted()) {
+                        logger.warn("Attempt to assign deleted role: {}", role.getId());
+                        throw new RoleAssignmentException("Cannot assign deleted role: " + role.getId());
+                    }
+                });
+                user.setRoles(new HashSet<>(roles));
+            } else {
+                Role userRole = roleRepository.findByName(UMSConstants.EMPLOYEE_ROLE)
+                        .orElseThrow(() -> new RoleAssignmentException("Default USER role not found. Please seed roles."));
+                if (user.getRoles() == null) user.setRoles(new HashSet<>());
+                user.getRoles().add(userRole);
+            }
+
+            User savedUser = userRepository.save(user);
+            logger.info("User saved successfully: {}", savedUser.getEmail());
+            return UserMapper.toDto(savedUser);
         }
-
-        User savedUser = userRepository.save(user);
-        logger.info("User saved successfully: {}", savedUser.getEmail());
-        return convertToDto(savedUser);
+        catch (RoleAssignmentException e) {
+            throw e;
+        }
+        catch (Exception e) {
+            logger.warn("Database error while saving new user {}: {}", userDto.getEmail(), e.getMessage());
+            throw new DatabaseException("Failed to save user due to database error");
+        }
     }
+
 
     /**
      * Fetches all active (non-deleted) users.
@@ -107,10 +127,15 @@ public class UserServiceImpl implements UserService, UserDetailsService {
     @Override
     public List<UserDto> findAllUsers() {
         logger.info("Fetching all active users");
-        return userRepository.findAllActiveUsers()
-                .stream()
-                .map(this::convertToDto)
-                .collect(Collectors.toList());
+        try {
+            return userRepository.findAllActiveUsers()
+                    .stream()
+                    .map(UserMapper::toDto)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            logger.warn("Database error while fetching all active users: {}", e.getMessage());
+            throw new DatabaseException("Failed to fetch users from the database");
+        }
     }
 
     /**
@@ -126,13 +151,22 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         if (email == null || email.isBlank()) {
             throw new ValidationException("Email cannot be null or blank");
         }
-
         logger.info("Fetching user by email: {}", email);
-        User user = userRepository.findActiveByEmail(email)
-                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
 
-        return convertToDto(user);
+        try {
+            User user = userRepository.findActiveByEmail(email)
+                    .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+
+            return UserMapper.toDto(user);
+
+        } catch (UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warn("Database error while fetching user by email {}: {}", email, e.getMessage());
+            throw new DatabaseException("Failed to fetch user from the database");
+        }
     }
+
 
     /**
      * Retrieves an active user by their unique ID.
@@ -149,11 +183,20 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Fetching user by ID: {}", userId);
-        User user = userRepository.findActiveById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
+        try {
+            User user = userRepository.findActiveById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
 
-        return convertToDto(user);
+            return UserMapper.toDto(user);
+
+        } catch (UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warn("Database error while fetching user by ID {}: {}", userId, e.getMessage());
+            throw new DatabaseException("Failed to fetch user from the database");
+        }
     }
+
 
     /**
      * Updates an existing user’s details including name, password, and roles.
@@ -166,33 +209,33 @@ public class UserServiceImpl implements UserService, UserDetailsService {
      * @throws RoleAssignmentException if invalid or deleted roles are assigned
      */
     @Override
-    public UserDto editUser(UserDto updatedUserDto, UUID userId) {
+    public UserDto editUser(UserUpdateDto updatedUserDto, UUID userId) {
         if (userId == null || updatedUserDto == null) {
             throw new ValidationException("User ID or data cannot be null");
         }
 
         logger.info("Editing user with ID: {}", userId);
-        User user = userRepository.findActiveById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        try {
+            User user = userRepository.findActiveById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        user.setFirstName(user.getFirstName());
-        user.setLastName(user.getLastName());
+            ValidationUtils.updateIfNotNull(updatedUserDto.getFirstName(), user::setFirstName);
+            ValidationUtils.updateIfNotNull(updatedUserDto.getLastName(), user::setLastName);
+            ValidationUtils.updateIfNotNull(updatedUserDto.getAddress(), user::setAddress);
+            ValidationUtils.updateIfNotNull(updatedUserDto.getProject(), user::setProject);
+            ValidationUtils.updateIfNotNull(updatedUserDto.getDepartment(), user::setDepartment);
 
-        if (updatedUserDto.getRoleIds() != null && !updatedUserDto.getRoleIds().isEmpty()) {
-            List<Role> roles = roleRepository.findAllById(updatedUserDto.getRoleIds());
-            roles.forEach(role -> {
-                if (role.getIsDeleted() != null) {
-                    logger.warn("Attempt to assign deleted role while updating user: {}", role.getId());
-                    throw new RoleAssignmentException("Cannot assign deleted role: " + role.getId());
-                }
-            });
-            user.setRoles(roles.stream().collect(Collectors.toSet()));
+            User savedUser = userRepository.save(user);
+            logger.info("User updated successfully: {}", userId);
+            return UserMapper.toDto(savedUser);
+        } catch (UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warn("Database error while editing user {}: {}", userId, e.getMessage());
+            throw new DatabaseException("Failed to update user in the database");
         }
-
-        User savedUser = userRepository.save(user);
-        logger.info("User updated successfully: {}", userId);
-        return convertToDto(savedUser);
     }
+
 
     /**
      * Soft deletes a user (marks as deleted) based on their ID.
@@ -210,11 +253,22 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Deleting user with ID: {}", userId);
-        userRepository.findActiveById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
-        userRepository.softDelete(userId, LocalDateTime.now());
-        logger.info("User soft-deleted successfully: {}", userId);
+
+        try {
+            userRepository.findActiveById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+            userRepository.softDelete(userId, LocalDateTime.now());
+            logger.info("User soft-deleted successfully: {}", userId);
+
+        } catch (UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.warn("Database error while deleting user {}: {}", userId, e.getMessage());
+            throw new DatabaseException("Failed to delete user from the database");
+        }
     }
+
 
     /**
      * Allows a logged-in user to change their password.
@@ -266,34 +320,44 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Registering new user: {}", registerDto.getEmail());
+        try {
 
-        if (userRepository.findActiveByEmail(registerDto.getEmail()).isPresent()) {
-            throw new RegistrationException("Email already registered: " + registerDto.getEmail());
+            if (userRepository.findActiveByEmail(registerDto.getEmail()).isPresent()) {
+                throw new RegistrationException("Email already registered: " + registerDto.getEmail());
+            }
+
+            User user = User.builder()
+                    .firstName(registerDto.getFirstName())
+                    .lastName(registerDto.getLastName())
+                    .email(registerDto.getEmail())
+                    .address(registerDto.getAddress())
+                    .department(registerDto.getDepartment())
+                    .project(registerDto.getProject())
+                    .password(passwordEncoder.encode(registerDto.getPassword()))
+                    .employeeId(generateEmployeeCode())
+                    .isActive(true)
+                    .isDeleted(false)
+                    .build();
+
+            Role userRole = roleRepository.findByName(UMSConstants.EMPLOYEE_ROLE)
+                    .orElseThrow(() -> new RoleAssignmentException("Default USER role not found. Please seed roles."));
+
+            if (user.getRoles() == null) user.setRoles(new HashSet<>());
+            user.getRoles().add(userRole);
+
+            User savedUser = userRepository.save(user);
+            logger.info("User registered successfully: {}", savedUser.getEmail());
+            return UserMapper.toDto(savedUser);
         }
-
-        User user = User.builder()
-                .firstName(registerDto.getFirstName())
-                .lastName(registerDto.getLastName())
-                .email(registerDto.getEmail())
-                .address(registerDto.getAddress())
-                .department(registerDto.getDepartment())
-                .project(registerDto.getProject())
-                .password(passwordEncoder.encode(registerDto.getPassword()))
-                .employeeId(generateEmployeeCode())
-                .isActive(true)
-                .isDeleted(false)
-                .build();
-
-
-        Role userRole = roleRepository.findByName(UMSConstants.EMPLOYEE_ROLE)
-                .orElseThrow(() -> new RoleAssignmentException("Default USER role not found. Please seed roles."));
-
-        user.getRoles().add(userRole);
-
-        User savedUser = userRepository.save(user);
-        logger.info("User registered successfully: {}", savedUser.getEmail());
-        return convertToDto(savedUser);
+        catch (RegistrationException | RoleAssignmentException e) {
+            throw e;
+        }
+        catch (Exception e) {
+            logger.warn("Database error while registering user {}: {}", registerDto.getEmail(), e.getMessage());
+            throw new DatabaseException("Failed to register user due to a database error");
+        }
     }
+
 
     /**
      * Loads a user for Spring Security authentication by email.
@@ -303,15 +367,27 @@ public class UserServiceImpl implements UserService, UserDetailsService {
      * @throws UsernameNotFoundException if user is not found
      */
     @Override
-    public User loadUserByUsername(String email) throws UsernameNotFoundException {
+    public User loadUserByUsername(String email) {
         if (email == null || email.isBlank()) {
             throw new UsernameNotFoundException("Email cannot be empty");
         }
 
         logger.info("Loading user by email: {}", email);
-        return userRepository.findByEmailWithRoles(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        try {
+
+            return userRepository.findByEmailWithRoles(email)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        }
+        catch (UsernameNotFoundException e) {
+            throw e;
+
+        }
+        catch (Exception e) {
+            logger.warn("Database error while loading user by email {}: {}", email, e.getMessage());
+            throw new DatabaseException("Failed to load user due to database error");
+        }
     }
+
 
     /**
      * Allows an admin to reset another user's password.
@@ -329,15 +405,24 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Admin requested password reset for user ID: {}", userId);
+        try {
+            User user = userRepository.findActiveById(userId)
+                    .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + userId));
 
-        User user = userRepository.findActiveById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + userId));
+            user.setPassword(passwordEncoder.encode(newPassword));
+            userRepository.save(user);
 
-        user.setPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
-
-        logger.info("Password successfully reset by admin for user ID: {}", userId);
+            logger.info("Password successfully reset by admin for user ID: {}", userId);
+        }
+        catch (UserNotFoundException e) {
+            throw e;
+        }
+        catch (Exception e) {
+            logger.warn("Database error while resetting password for user ID {}: {}", userId, e.getMessage());
+            throw new DatabaseException("Failed to reset password due to a database error");
+        }
     }
+
 
     private String generateEmployeeCode() {
         String year = String.valueOf(Year.now().getValue());
@@ -361,27 +446,4 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         return "i2i" + year + formatted;
     }
 
-    /**
-     * Converts a User entity to a UserDto.
-     * Used internally to return clean DTOs to the controller layer.
-     *
-     * @param user the user entity
-     * @return mapped  UserDto
-     */
-    private UserDto convertToDto(User user) {
-        UserDto dto = new UserDto();
-        dto.setId(user.getId());
-        dto.setFirstName(user.getFirstName());
-        dto.setLastName(user.getLastName());
-        dto.setEmail(user.getEmail());
-        dto.setAddress(user.getAddress());
-        dto.setDepartment(user.getDepartment());
-        dto.setProject(user.getProject());
-        dto.setEmployeeId(user.getEmployeeId());
-
-        if (user.getRoles() != null) {
-            dto.setRoleIds(user.getRoles().stream().map(Role::getId).collect(Collectors.toList()));
-        }
-        return dto;
-    }
 }

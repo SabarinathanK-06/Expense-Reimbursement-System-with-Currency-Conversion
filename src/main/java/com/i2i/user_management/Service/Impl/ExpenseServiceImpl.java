@@ -491,14 +491,24 @@ public class ExpenseServiceImpl implements ExpenseService {
      */
     @Override
     public List<CurrencySummaryDto> reportTotalByCurrency(String currency, LocalDate from, LocalDate to) {
-        validateCurrencyCode(currency, null);
+
         List<CurrencySummaryDto> summaries;
 
-        try {
-            summaries = expenseRepository.totalByCurrency(currency.toUpperCase(), from, to);
-        } catch (Exception e) {
-            log.warn("Failed to fetch total by currency between {} and {}: {}", from, to, e.getMessage());
-            throw new DatabaseException("Error retrieving approved expense summaries from database", e);
+        if(currency == null || currency.isBlank()) {
+            try {
+                summaries = expenseRepository.groupByCurrency(from, to);
+            } catch (Exception e) {
+                log.warn("Failed to fetch group by currency between {} and {}: {}", from, to, e.getMessage());
+                throw new DatabaseException("Error retrieving approved expense summaries from database", e);
+            }
+        } else {
+            validateCurrencyCode(currency, null);
+            try {
+                summaries = expenseRepository.totalByCurrency(currency.toUpperCase(), from, to);
+            } catch (Exception e) {
+                log.warn("Failed to fetch total by currency between {} and {}: {}", from, to, e.getMessage());
+                throw new DatabaseException("Error retrieving approved expense summaries from database", e);
+            }
         }
         return summaries.stream()
                 .map(summary -> {

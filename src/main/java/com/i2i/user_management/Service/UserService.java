@@ -4,6 +4,7 @@ import com.i2i.user_management.Dto.LoginDto;
 import com.i2i.user_management.Dto.LoginResponseDto;
 import com.i2i.user_management.Dto.RegisterDto;
 import com.i2i.user_management.Dto.UserDto;
+import com.i2i.user_management.Dto.UserUpdateDto;
 import com.i2i.user_management.Model.User;
 
 import java.util.List;
@@ -19,7 +20,7 @@ public interface UserService {
 
     UserDto findUserById(UUID userId);
 
-    UserDto editUser(UserDto updatedUserDto, UUID userId);
+    UserDto editUser(UserUpdateDto updatedUserDto, UUID userId);
 
     void deleteUserById(UUID userId); // Soft delete
 
