@@ -71,7 +71,10 @@ public class SecurityConfig {
                     .csrf(AbstractHttpConfigurer::disable)
                     .authenticationProvider(authenticationProvider)
                     .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/users/register", "/auth/login", "/auth/logout").permitAll()
+                            .requestMatchers("/users/register", "/auth/login", "/auth/logout",
+                                    "/v3/api-docs/**",
+                                    "/swagger-ui/**",
+                                    "/swagger-ui.html").permitAll()
                             .requestMatchers("/users", "/users/*/reset-password", "/users/email/*",
                                     "/roles/create", "/roles/all", "/roles/*", "/roles/name/*", "/roles/assign/*")
                                     .hasAuthority(UMSConstants.SUPER_ADMIN_ROLE)

@@ -21,8 +21,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findAllActiveUsers();
 
     @Modifying
-    @Query("UPDATE User u SET u.isDeleted = true, u.updatedAt = :updatedAt WHERE u.id = :id")
-    void softDelete(@Param("id") UUID id, @Param("updatedAt") LocalDateTime updatedAt);
+    @Query("UPDATE User u SET u.isDeleted = true, u.updatedAt = :updatedAt, u.updatedBy = :deletedBy WHERE u.id = :id")
+    void softDelete(@Param("id") UUID id, @Param("updatedAt") LocalDateTime updatedAt, @Param("deletedBy") String deletedBy);
 
     @Query("SELECT u FROM User u WHERE u.id = :id AND u.isActive = true AND u.isDeleted = false")
     Optional<User> findActiveById(@Param("id") UUID id);

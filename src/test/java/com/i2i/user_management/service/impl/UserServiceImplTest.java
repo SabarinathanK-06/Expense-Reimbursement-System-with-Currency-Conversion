@@ -95,6 +95,44 @@ public class UserServiceImplTest {
     }
 
     @Test
+    void saveUser_Success_WhenDefaultRoleApplies() {
+        //arrange
+        userDto.setRoleIds(null);
+        when(userRepository.findLastEmployeeCodeForYear(String.valueOf(Year.now().getValue())))
+                .thenReturn(Optional.of("I2I20250007"));
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded");
+        when(roleRepository.findByName(any())).thenReturn(Optional.of(role));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        //act
+        UserDto result = userService.saveUser(userDto);
+
+        //assert
+        assertNotNull(result);
+        assertEquals(user.getEmail(), result.getEmail());
+        verify(userRepository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    void saveUser_WhenDatabaseExceptionOccurs() {
+        //arrange
+        userDto.setRoleIds(null);
+        when(userRepository.findLastEmployeeCodeForYear(String.valueOf(Year.now().getValue())))
+                .thenReturn(Optional.of("I2I20250007"));
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded");
+        when(roleRepository.findByName(any())).thenThrow(new RuntimeException("Failed to fetch"));
+
+        //act & assert
+        assertThrows(DatabaseException.class, () -> userService.saveUser(userDto));
+    }
+
+    @Test
+    void saveUser_ShouldThrow_WhenUserDtoNull() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.saveUser(null));
+    }
+
+    @Test
     void saveUser_ShouldThrow_WhenRoleDeleted() {
         //arrange
         Role deletedRole = TestData.getRole(UMSConstants.EMPLOYEE_ROLE);
@@ -209,6 +247,12 @@ public class UserServiceImplTest {
     }
 
     @Test
+    void findUserById_ShouldThrow_WhenEmailIsNull() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.findUserById(null));
+    }
+
+    @Test
     void editUser_Success() {
         //arrange
         when(userRepository.findActiveById(user.getId())).thenReturn(Optional.of(user));
@@ -255,14 +299,17 @@ public class UserServiceImplTest {
 
     @Test
     void deleteUserById_Success() {
-        //arrange
-        when(userRepository.findActiveById(user.getId())).thenReturn(Optional.of(user));
+        try (MockedStatic<SecurityContextHelper> mocked = Mockito.mockStatic(SecurityContextHelper.class)) {
+            //arrange
+            mocked.when(SecurityContextHelper::extractEmailFromContext).thenReturn(TestConstants.EMAIL);
+            when(userRepository.findActiveById(user.getId())).thenReturn(Optional.of(user));
 
-        //act
-        userService.deleteUserById(user.getId());
+            //act
+            userService.deleteUserById(user.getId());
 
-        //assert
-        verify(userRepository, times(1)).softDelete(eq(user.getId()), any(LocalDateTime.class));
+            //assert
+            verify(userRepository, times(1)).softDelete(eq(user.getId()), any(LocalDateTime.class), anyString());
+        }
     }
 
     @Test
@@ -272,6 +319,12 @@ public class UserServiceImplTest {
 
         //act & assert
         assertThrows(UserNotFoundException.class, () -> userService.deleteUserById(user.getId()));
+    }
+
+    @Test
+    void deleteUserById_ShouldThrow_WhenUserIdIsNull() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.deleteUserById(null));
     }
 
     @Test
@@ -301,6 +354,18 @@ public class UserServiceImplTest {
     }
 
     @Test
+    void registerUser_WhenFindLastEmployeeCodeForYearThrowsError() {
+        //arange
+        RegisterDto registerDto = TestData.getRegisterDto();
+        when(userRepository.findActiveByEmail(registerDto.getEmail())).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+        when(userRepository.findLastEmployeeCodeForYear(anyString())).thenThrow(new RuntimeException("Failed to fetch"));
+
+        //act & assert
+        assertThrows(DatabaseException.class, ()-> userService.registerUser(registerDto));
+    }
+
+    @Test
     void registerUser_ShouldThrow_WhenEmailAlreadyExists() {
         //arrange
         RegisterDto registerDto = TestData.getRegisterDto();
@@ -308,6 +373,23 @@ public class UserServiceImplTest {
 
         //act & assert
         assertThrows(RegistrationException.class, () -> userService.registerUser(registerDto));
+    }
+
+    @Test
+    void registerUser_ShouldThrow_WhenUserRepoThrowsError() {
+        //arrange
+        RegisterDto registerDto = TestData.getRegisterDto();
+        when(userRepository.findActiveByEmail(registerDto.getEmail()))
+                .thenThrow(new RuntimeException("Failed to fetch"));
+
+        //act & assert
+        assertThrows(DatabaseException.class, () -> userService.registerUser(registerDto));
+    }
+
+    @Test
+    void registerUser_ShouldThrow_WhenRegisterDtoIsNull() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.registerUser(null));
     }
 
     @Test
@@ -340,6 +422,18 @@ public class UserServiceImplTest {
 
         //act & assert
         assertThrows(UsernameNotFoundException.class, () -> userService.loadUserByUsername(user.getEmail()));
+    }
+
+    @Test
+    void loadUserByUsername_ShouldThrow_WhenEmailIsNull() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.loadUserByUsername(null));
+    }
+
+    @Test
+    void loadUserByUsername_ShouldThrow_WhenEmailIsBlank() {
+        //act & assert
+        assertThrows(ValidationException.class, () -> userService.loadUserByUsername(""));
     }
 
     @Test

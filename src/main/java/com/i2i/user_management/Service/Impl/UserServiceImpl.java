@@ -72,6 +72,8 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             throw new ValidationException("Email cannot be blank");
         }
 
+        String email = SecurityContextHelper.extractEmailFromContext();
+
         logger.info("Saving new user: {}", userDto.getEmail());
 
         try {
@@ -87,6 +89,7 @@ public class UserServiceImpl implements UserService, UserDetailsService {
                     .employeeId(employeeId)
                     .isActive(true)
                     .isDeleted(false)
+                    .createdBy(email)
                     .build();
 
             if (userDto.getRoleIds() != null && !userDto.getRoleIds().isEmpty()) {
@@ -214,6 +217,8 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             throw new ValidationException("User ID or data cannot be null");
         }
 
+        String email = SecurityContextHelper.extractEmailFromContext();
+
         logger.info("Editing user with ID: {}", userId);
         try {
             User user = userRepository.findActiveById(userId)
@@ -224,6 +229,9 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             ValidationUtils.updateIfNotNull(updatedUserDto.getAddress(), user::setAddress);
             ValidationUtils.updateIfNotNull(updatedUserDto.getProject(), user::setProject);
             ValidationUtils.updateIfNotNull(updatedUserDto.getDepartment(), user::setDepartment);
+
+            user.setUpdatedAt(LocalDateTime.now());
+            user.setUpdatedBy(email);
 
             User savedUser = userRepository.save(user);
             logger.info("User updated successfully: {}", userId);
@@ -254,11 +262,13 @@ public class UserServiceImpl implements UserService, UserDetailsService {
 
         logger.info("Deleting user with ID: {}", userId);
 
+        String deletedBy = SecurityContextHelper.extractEmailFromContext();
+
         try {
             userRepository.findActiveById(userId)
                     .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-            userRepository.softDelete(userId, LocalDateTime.now());
+            userRepository.softDelete(userId, LocalDateTime.now(), deletedBy);
             logger.info("User soft-deleted successfully: {}", userId);
 
         } catch (UserNotFoundException e) {
@@ -297,6 +307,8 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             throw new ValidationException("Old password is incorrect");
         }
 
+        user.setUpdatedBy(currentUserEmail);
+        user.setUpdatedAt(LocalDateTime.now());
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         logger.info("Password changed successfully for user: {}", currentUserEmail);
@@ -320,6 +332,8 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Registering new user: {}", registerDto.getEmail());
+
+        String email = SecurityContextHelper.extractEmailFromContext();
         try {
 
             if (userRepository.findActiveByEmail(registerDto.getEmail()).isPresent()) {
@@ -335,6 +349,8 @@ public class UserServiceImpl implements UserService, UserDetailsService {
                     .project(registerDto.getProject())
                     .password(passwordEncoder.encode(registerDto.getPassword()))
                     .employeeId(generateEmployeeCode())
+                    .updatedAt(LocalDateTime.now())
+                    .updatedBy(email)
                     .isActive(true)
                     .isDeleted(false)
                     .build();
@@ -349,7 +365,7 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             logger.info("User registered successfully: {}", savedUser.getEmail());
             return UserMapper.toDto(savedUser);
         }
-        catch (RegistrationException | RoleAssignmentException e) {
+        catch (RegistrationException | RoleAssignmentException | ValidationException e) {
             throw e;
         }
         catch (Exception e) {
@@ -363,13 +379,13 @@ public class UserServiceImpl implements UserService, UserDetailsService {
      * Loads a user for Spring Security authentication by email.
      *
      * @param email user’s email
-     * @return User object implementing org.springframework.security.core.userdetails.UserDetails
+     * @return User object implementing UserDetails
      * @throws UsernameNotFoundException if user is not found
      */
     @Override
     public User loadUserByUsername(String email) {
         if (email == null || email.isBlank()) {
-            throw new UsernameNotFoundException("Email cannot be empty");
+            throw new ValidationException("Email cannot be empty");
         }
 
         logger.info("Loading user by email: {}", email);
@@ -405,10 +421,14 @@ public class UserServiceImpl implements UserService, UserDetailsService {
         }
 
         logger.info("Admin requested password reset for user ID: {}", userId);
+
+        String email = SecurityContextHelper.extractEmailFromContext();
         try {
             User user = userRepository.findActiveById(userId)
                     .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + userId));
 
+            user.setUpdatedBy(email);
+            user.setUpdatedAt(LocalDateTime.now());
             user.setPassword(passwordEncoder.encode(newPassword));
             userRepository.save(user);
 

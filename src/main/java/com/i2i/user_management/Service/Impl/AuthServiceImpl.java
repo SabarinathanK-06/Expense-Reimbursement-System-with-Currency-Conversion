@@ -19,7 +19,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Service implementation responsible for managing authentication-related operations,
@@ -64,6 +66,11 @@ public class AuthServiceImpl implements AuthService {
 
         logger.info("Attempting login for user: {}", loginDto.getEmail());
 
+        User user = userRepository.findByEmailWithRoles(loginDto.getEmail())
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + loginDto.getEmail()));
+
+        checkAccountLock(user);
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -73,11 +80,12 @@ public class AuthServiceImpl implements AuthService {
             );
         } catch (BadCredentialsException e) {
             logger.warn("Invalid login attempt for user: {}", loginDto.getEmail());
+
+            processFailedAttempt(user);
             throw new AuthenticationFailedException("Invalid email or password");
         }
 
-        User user = userRepository.findByEmailWithRoles(loginDto.getEmail())
-                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + loginDto.getEmail()));
+        resetFailedAttempts(user); // On successful login, reset's attempts
 
         if (!user.isEnabled()) {
             throw new AuthenticationFailedException("User account is disabled");
@@ -127,5 +135,55 @@ public class AuthServiceImpl implements AuthService {
 
         logger.info("Token successfully blacklisted until {}", expiry);
     }
+
+    private void checkAccountLock(User user) {
+        LocalDateTime now = LocalDateTime.now();
+
+        if (user.getLockedUntil() != null) {
+            if (now.isBefore(user.getLockedUntil())) {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                String formattedLockTime = user.getLockedUntil().format(formatter);
+
+                logger.warn("Login blocked. User {} is locked until {}",
+                        user.getEmail(), formattedLockTime);
+                throw new AuthenticationFailedException("Account is locked until: "
+                        + formattedLockTime + ". Try again later.");
+            }
+
+            logger.info("Lock expired. User {} is now unlocked.", user.getEmail());
+        }
+    }
+
+    private void processFailedAttempt(User user) {
+        LocalDateTime now = LocalDateTime.now();
+
+        if (user.getLastFailedAttempt() == null ||
+                Duration.between(user.getLastFailedAttempt(), now).toHours() >= 1) {
+            user.setFailedAttempts(1);
+        } else {
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+        }
+        user.setLastFailedAttempt(now);
+
+        if (user.getFailedAttempts() >= 5) {
+            user.setLockedUntil(now.plusDays(1));
+            logger.warn("User {} locked until {} due to repeated failed attempts",
+                    user.getEmail(), user.getLockedUntil());
+        }
+        userRepository.save(user);
+    }
+
+    private void resetFailedAttempts(User user) {
+        if (user.getFailedAttempts() > 0) {
+            user.setFailedAttempts(0);
+            user.setLastFailedAttempt(null);
+            user.setLockedUntil(null);
+            userRepository.save(user);
+            logger.debug("Failed attempts reset for user {}", user.getEmail());
+        }
+    }
+
+
+
 
 }

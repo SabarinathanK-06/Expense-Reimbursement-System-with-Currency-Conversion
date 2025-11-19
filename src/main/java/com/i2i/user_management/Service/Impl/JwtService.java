@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * @author Sabarinathan
  */
 @Service
-public class JwtService {
+public class    JwtService {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
 
